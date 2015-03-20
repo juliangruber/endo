@@ -1,0 +1,30 @@
+{
+  "name": "endo",
+  "version": "0.1.0",
+  "description": "Simple self-documenting API endpoints",
+  "main": "index.js",
+  "dependencies": {
+    "ecstatic": "^0.5.5",
+    "paramify": "^0.1.2",
+    "xtend": "^4.0.0"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/deanlandolt/endo.git"
+  },
+  "keywords": [
+    "http",
+    "rest",
+    "api",
+    "endpoints"
+  ],
+  "author": "Dean Landolt <dean@deanlandolt.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/deanlandolt/endo/issues"
+  },
+  "homepage": "https://github.com/deanlandolt/endo"
+}
