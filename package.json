@@ -1,6 +1,6 @@
 {
   "name": "endo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Simple self-documenting API endpoints",
   "main": "index.js",
   "dependencies": {
