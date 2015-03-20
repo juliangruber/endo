@@ -119,8 +119,7 @@ function parseApi(api, results) {
 
     var events = section.events || {};
     for (var name in events) {
-      context.name = '#' + name;
-      context.path = '#' + sectionName + '/' + name;
+      context.name = context.path = '#' + sectionName + '/' + name;
       context.type = 'EVENT';
       results.push(parseEndpoint(events[name], context));
     }
@@ -168,7 +167,7 @@ module.exports = function (config) {
   var doc = config.doc = config.doc || {};
 
   var docPath = (config.prefix || '') + (doc.prefix || '');
-  var API_DATA = 'define(' + JSON.stringify({ api: parseApi(api) }, null, '    ') + ')';
+  var API_DATA = 'define(' + JSON.stringify({ api: parseApi(api) }) + ')';
   var API_PROJECT = 'define(' + JSON.stringify(parseProfile(config)) + ')';
 
   //
