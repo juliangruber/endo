@@ -36,11 +36,9 @@ function parseFieldGroup(fields, group) {
       group: group,
       type: field.type,
       field: key,
+      optional: field.required === false,
       description: field.description || ''
     };
-    // if ('required' in field) {
-    //   result.optional = !field.required;
-    // }
     results.push(result);
   }
 
@@ -51,20 +49,21 @@ function parseFields(fields, prefix) {
   fields || (fields = {});
   var value = { fields: {} };
 
-  //
-  // append group name to provided group prefix if it ends with a space
-  //
-  var appendName = prefix[prefix.length - 1] === ' ';
-
   for (var name in fields) {
-    var group = prefix + (appendName && name || '');
+    var group = prefix + name;
     value.fields[group] = parseFieldGroup(fields[name], group);
   }
 
   return value;
 }
 
-function parseEndpoint(target, context) {
+function parseParams(params) {
+  var result = parseFields({ '': params }, 'Parameter');
+  var fields = result.fields && result.fields.Parameter || [];
+  return fields.length ? result : {};
+}
+
+function parseEndpoint(source, context) {
   var value = {};
 
   value.name = context.name;
@@ -73,22 +72,22 @@ function parseEndpoint(target, context) {
   value.group = context.sectionName || '';
   value.groupTitle = context.section && context.section.title || value.group;
 
-  value.permission = (target.permissions || []).map(function (value) {
+  value.permission = (source.permissions || []).map(function (value) {
     return typeof value === 'string' ? context.permissions[value] : value
   }).filter(function (value) {
     return value
   });
 
-  value.title = target.title;
-  value.description = target.description;
-  value.type = context.type || (target.method || 'GET').toUpperCase();
-  value.url = context.path || target.path;
+  value.title = source.title;
+  value.description = source.description;
+  value.type = context.type || (source.method || 'GET').toUpperCase();
+  value.url = context.path || source.path;
 
-  value.parameter = parseFields(target.params, 'Parameter');
-  value.success = parseFields(target.success, 'Success ');
-  value.error = parseFields(target.error, 'Error ');
+  value.parameter = parseParams(source.params);
+  value.success = parseFields(source.success, 'Success ');
+  value.error = parseFields(source.error, 'Error ');
 
-  value.examples = parseExamples(target.examples || {});
+  value.examples = parseExamples(source.examples || {});
 
   return value;
 }
@@ -101,8 +100,9 @@ function parseApi(api, results) {
   context.permissions = parsePermissions(api.permissions || {});
 
   //
-  // endpoints and events organized by section
+  // requests and events organized by section
   //
+  var name, endpoints;
   for (var sectionName in api.sections) {
     context.sectionName = sectionName;
     var section = context.section = api.sections[sectionName] || {};
@@ -111,17 +111,17 @@ function parseApi(api, results) {
     context.path = '';
     context.type = '';
 
-    var endpoints = section.endpoints || {};
-    for (var name in endpoints) {
+    endpoints = section.requests || {};
+    for (name in endpoints) {
       context.name = name;
       results.push(parseEndpoint(endpoints[name], context));
     }
 
-    var events = section.events || {};
-    for (var name in events) {
+    endpoints = section.events || {};
+    for (name in endpoints) {
       context.name = context.path = '#' + sectionName + '/' + name;
       context.type = 'EVENT';
-      results.push(parseEndpoint(events[name], context));
+      results.push(parseEndpoint(endpoints[name], context));
     }
   }
 

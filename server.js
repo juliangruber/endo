@@ -1,5 +1,3 @@
-// TODO clean this up and add the necessary deps
-
 var http = require('http');
 var engine = require('engine.io-stream');
 var split = require('split');
@@ -10,12 +8,12 @@ var split = require('split');
 module.exports = function(app) {
 
   var requests = app.requests;
-  var events = app.events;
+  var events = app.events || [];
 
   var server = http.createServer(function(req, res) {
     for (var i in requests) {
-      // TODO .test(req, cb)?
-      if (requests[i].test(req, res))  {
+      // TODO .test(req, cb)? or promises?
+      if (requests[i].test(req))  {
         return requests[i].handler(req, res);
       }
     }
@@ -53,10 +51,11 @@ module.exports = function(app) {
   }
 
   //
-  // if there are events, attach the websocket server.
+  // if there are events, attach the websocket server
   //
-  if (events && events.length)
+  if (events.length || Object.keys(events)) {
     engine(routeEvent).attach(server, '/server');
+  }
 
   return server;
 };
