@@ -2,16 +2,9 @@ var path = require('path');
 var xtend = require('xtend');
 var ecstatic = require('ecstatic');
 
-function parsePermissions(permissions) {
-  var map = {};
-  for (var name in permissions) {
-    map[name] = {
-      name: name,
-      title: permissions[name].title || name,
-      description: permissions[name].description || '',
-    };
-  }
-  return map;
+function parsePermission(endpoint) {
+  var annotations = endpoint.handler && endpoint.handler.annotations || {};
+  return annotations.permission ? [ annotations.permission ] : []
 }
 
 function parseExamples(examples) {
@@ -72,11 +65,7 @@ function parseEndpoint(source, context) {
   value.group = context.sectionName || '';
   value.groupTitle = context.section && context.section.title || value.group;
 
-  value.permission = (source.permissions || []).map(function (value) {
-    return typeof value === 'string' ? context.permissions[value] : value
-  }).filter(function (value) {
-    return value
-  });
+  value.permission = parsePermission(source);
 
   value.title = source.title;
   value.description = source.description;
@@ -95,9 +84,7 @@ function parseEndpoint(source, context) {
 function parseApi(api, results) {
   results || (results = []);
 
-  var context = {};
-  context.version = api.version;
-  context.permissions = parsePermissions(api.permissions || {});
+  var context = { version: api.version };
 
   //
   // requests and events organized by section
@@ -119,7 +106,9 @@ function parseApi(api, results) {
 
     endpoints = section.events || {};
     for (name in endpoints) {
-      context.name = context.path = '#' + sectionName + '/' + name;
+      // TODO: this breaks scripts in apidocsjs
+      // context.name = context.path = '#' + sectionName + '/' + name;
+      context.name = context.path = '--EVENT--' + sectionName + '--' + name;
       context.type = 'EVENT';
       results.push(parseEndpoint(endpoints[name], context));
     }
