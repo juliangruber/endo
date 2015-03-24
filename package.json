@@ -1,7 +1,7 @@
 {
   "name": "endo",
   "version": "0.2.0",
-  "description": "Simple self-documenting API endpoints",
+  "description": "Simple server for serving up self-documenting API endpoints",
   "main": "index.js",
   "dependencies": {
     "ecstatic": "^0.5.5",
