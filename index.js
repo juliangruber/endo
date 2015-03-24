@@ -1,6 +1,5 @@
 var docRequests = require('./doc/requests');
 var apiRequests = require('./api/requests');
-var apiEvents = require('./api/events');
 
 
 module.exports = function (config) {
@@ -8,8 +7,7 @@ module.exports = function (config) {
   // an app is just a set of handlers api and doc requests and events
   //
   var app = {
-    requests: [ apiRequests(config) ],
-    events: [ apiEvents(config) ],
+    requests: [ apiRequests(config) ]
   };
 
   //

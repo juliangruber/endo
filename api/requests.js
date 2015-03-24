@@ -5,11 +5,11 @@ function getRoutes(api) {
   var routes = {};
 
   //
-  // endpoints are organized by section
+  // endpoints are organized into groups
   //
-  for (var sectionName in api.sections) {
-    var section = api.sections[sectionName];
-    var endpoints = section.endpoints || {};
+  for (var groupName in api.groups) {
+    var group = api.groups[groupName];
+    var endpoints = group.endpoints || {};
 
     for (var name in endpoints) {
       var endpoint = endpoints[name];

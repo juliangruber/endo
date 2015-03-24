@@ -62,8 +62,8 @@ function parseEndpoint(source, context) {
   value.name = context.name;
   value.version = context.version;
 
-  value.group = context.sectionName || '';
-  value.groupTitle = context.section && context.section.title || value.group;
+  value.group = context.groupName || '';
+  value.groupTitle = context.group && context.group.title || value.group;
 
   value.permission = parsePermission(source);
 
@@ -87,29 +87,20 @@ function parseApi(api, results) {
   var context = { version: api.version };
 
   //
-  // requests and events organized by section
+  // endpoints organized by group
   //
   var name, endpoints;
-  for (var sectionName in api.sections) {
-    context.sectionName = sectionName;
-    var section = context.section = api.sections[sectionName] || {};
+  for (var groupName in api.groups) {
+    context.groupName = groupName;
+    var group = context.group = api.groups[groupName] || {};
 
     // clear any context values that may have been written
     context.path = '';
     context.type = '';
 
-    endpoints = section.requests || {};
+    endpoints = group.endpoints || {};
     for (name in endpoints) {
       context.name = name;
-      results.push(parseEndpoint(endpoints[name], context));
-    }
-
-    endpoints = section.events || {};
-    for (name in endpoints) {
-      // TODO: this breaks scripts in apidocsjs
-      // context.name = context.path = '#' + sectionName + '/' + name;
-      context.name = context.path = '--EVENT--' + sectionName + '--' + name;
-      context.type = 'EVENT';
       results.push(parseEndpoint(endpoints[name], context));
     }
   }
