@@ -1,2 +1,3 @@
 # endo
-Simple self-documenting API endpoints
+
+Simple server for serving up self-documenting API endpoints
