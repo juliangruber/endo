@@ -6,7 +6,9 @@
   "dependencies": {
     "ecstatic": "^0.5.5",
     "engine.io-stream": "^0.4.3",
+    "monotonic-timestamp": "0.0.9",
     "paramify": "^0.1.2",
+    "semver": "^4.3.3",
     "split": "^0.3.2",
     "xtend": "^4.0.0"
   },
