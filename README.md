@@ -36,8 +36,6 @@ The leading path component represents API version by default. It is parsed as a 
 /^1.0/some/endpiont
 ```
 
-TODO: should we redirect to a canonical versioned URL?
-
 
 ## Middleware
 
