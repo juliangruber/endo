@@ -9,22 +9,21 @@ We assume handlers deal explicitly in JSON unless otherwise noted. Endpoint "han
 
 Handlers may provide top level `status` and/or `headers` keys in returned responses to extend or override default values.
 
+Handlers returning JSON-serialized values are analogous to RPC calls. When defining the API, the "arguments" of this call can be defined by a request body schema, and the return value defined by a response body schema. The request and response schemas could have any structure, and the handler should adhere to them (we could even verify this at runtime in development environments).
+
+Response values for JSON serialization may optionally be returned as promises. Alternatively, handlers may return a stream object directly that can be piped to the WebSocket or HTTP response stream. This stream object may also provide custom `status` or `headers` keys, but these keys must be `own` properties of the stream object -- values on the stream's prototype are ignored to avoid possible conflicts.
+
 
 ## WebSockets vs. HTTP
 
 All endpoints can be exposed over HTTP, WebSockets, or both. APIs for WebSockets interaction are symmetrical with HTTP interaction, and handlers are completely agnostic to the underlying transport -- the same handler logic is invoked, the exact same way, regardless of which transport is being used.
 
 
-## Procedures vs. Streams
-
-Handlers returning JSON-serialized values are analogous to RPC calls. When defining the API, the "arguments" of this call can be defined by a request body schema, and the return value defined by a response body schema. The request and response schemas can have any structure, and the handler should adhere to them (we could even enforce this at runtime in dev environments).
-
-TODO: should we special-case strings (and/or buffers) and bypass JSON serialization for these? If so, should we also write a reasonable `Content-Type` if one's not provided?
-
-Response values for JSON serialization may optionally be returned as promises. Alternatively, handlers may return a stream object that can be piped to the WebSocket or HTTP response stream.
+## Endpoint Handlers
 
 
-## Subscriptions vs. Queries
+
+## Subscriptions
 
 
 ## Semver Endpoint Paths
@@ -42,3 +41,8 @@ The leading path component represents API version by default. It is parsed as a 
 ```
 
 TODO: should we redirect to a canonical versioned URL?
+
+
+## Middleware
+
+Middleware functionality can be written as higher-order functions which wrap handlers. A middleware function may inspect or alter the request object before passing it to the provided handler. It may also inspect or alter the response returned from the handler. No magical non-linear middleware conventions are necessary -- just function composition.
