@@ -8,11 +8,10 @@ var url = require('url');
 var xtend = require('xtend');
 
 function notFound(request) {
-  return {
-    status: 404,
-    path: request.url,
-    message: 'Not Found: ' + request.url
-  };
+  // TODO: custom Error instance
+  var error = new Error('Not Found: ' + request.url);
+  error.status = 400;
+  return error;
 }
 
 //
@@ -111,61 +110,61 @@ function defaultRouter(api) {
   }
 }
 
+var defaultHeaders = { 'content-type': 'application/json' };
+
 //
 // stupid simple server, invokes request handlers, expects stream or JSON body
 //
 module.exports = function serve (config, callback) {
-  var headers = xtend({ 'content-type': 'application/json' }, config.headers);
   var router = defaultRouter(config.api);
+  var baseHeaders = xtend(config.headers, defaultHeaders);
 
-  function getMetadata(request, body) {
-    var meta = {};
-    meta.path = request.path || request.url;
-    meta.streaming = body && typeof body.pipe === 'function';
-    meta.body = meta.streaming ? null : body;
-
-    //
-    // get metadata from stream body or prototype of naked JSONable body
-    //
-    var base = meta.streaming ? body : body.__proto__ || {};
-    meta.status = base.status || 200;
-    meta.headers = xtend({}, headers, base.headers);
-    return meta;
+  function getHeaders(data) {
+    return xtend(data.headers, baseHeaders);
   }
 
   function routeRequest(request, response) {
 
-    var route = router(request);
+    function writeResponse(data) {
+      response.writeHead(data.status || 200, getHeaders(data));
+      response.end(JSON.stringify(data.body)); 
+    }
 
+    function writeError(error) {
+      //
+      // normalize errors as responses
+      //
+      error.status || (error.status = 500);
+      error.body || (error.body = error.message);
+      writeResponse(error);
+    }
+
+    //
+    // look up handler for request
+    //
+    var route = router(request);
     if (!route) {
-      var error = notFound(request)
-      response.writeHead(error.status, headers);
-      return response.end(JSON.stringify(error));
+      return writeError(notFound(request));
     }
 
     //
     // add match params to request and invoke handler
     //
     request.params = route[1].params;
-    Promise.resolve(route[0].handler(request)).then(function (body) {
-
-      var meta = getMetadata(request, body);
-      response.writeHead(meta.status, meta.headers);
+    Promise.resolve(route[0].handler(request)).then(function (data) {
 
       //
       // stream bodies get piped directly to response, passing through metadata
       //
-      if (meta.streaming) {
-        body.pipe(response)
+      if (typeof data.pipe === 'function') {
+        response.writeHead(data.status || 200, getHeaders(data));
+        data.pipe(response)
       }
       else {
-        response.end(JSON.stringify(body));
+        writeResponse(data);
       }
 
-    }).catch(function (error) {
-      response.writeHead(error.status || 500, headers);
-      response.end(JSON.stringify(error));
-    });
+    }).catch(writeError);
   }
 
   //
@@ -173,82 +172,86 @@ module.exports = function serve (config, callback) {
   //
   function routeEvent(stream) {
 
-    function writeEvent(payload) {
-      stream.write(JSON.stringify(payload) + '\n');
-    }
+    //
+    // helper for normalizing and serializing event data
+    //
 
     function handleEvent(request) {
+      var event = {
+        url: request.url
+      };
+
+      function writeEvent(data) {
+        stream.write(JSON.stringify(xtend(event, data)) + '\n');
+      }
+
+      function writeError(error) {
+        writeEvent({ error: error });
+      }
+
       //
       // run event request payload through standard request routing
       //
       var route = router(request);
 
       if (!route) {
-        return writeEvent(notFound(request));
+        return writeEvent({
+          url: request.url,
+          error: notFound(request)
+        });
       }
 
       //
       // add match params to request and invoke handler
       //
       request.params = route[1].params;
-      Promise.resolve(route[0].handler(request)).then(function (body) {
-
-        var meta = getMetadata(request, body);
+      Promise.resolve(route[0].handler(request)).then(function (data) {
 
         //
         // non-streaming handler responses result in a single event record
         //
-        if (!meta.streaming) {
-          return writeEvent(meta);
+        if (typeof data.pipe !== 'function') {
+          return writeEvent(data);
         }
 
         //
         // streaming responses get an associated subscription id
         //
-        meta.subscriptionId = timestamp();
-        writeEvent(meta);
+        event.subscriptionId = timestamp();
+
+        //
+        // write event record head, providing any handler metadata
+        //
+        writeEvent({
+          status: data.status,
+          headers: data.headers
+        });
 
         //
         // write data chunks to socket
         //
-        data.on('data', function (data) {
-          meta.body = data;
-          writeEvent(meta);
+        data.on('data', function (chunk) {
+          writeEvent({ body: chunk });
         });
 
         //
         // write null error key to signal end
         //
         data.on('close', function () {
-          meta.error = meta.body = null;
-          writeEvent(meta);
+          writeEvent({ error: null });
         });
 
         //
         // pass along error, signaling stream end
         //
-        data.on('error', function (error) {
-          meta.body = null;
-          meta.error = error;
-          meta.status = error.status || 500;
-          writeEvent(meta);
-        });
+        data.on('error', writeError);
 
-      }).catch(function (error) {
-        //
-        // pass along unhandled exceptions
-        //
-        writeEvent({
-          status: error.status || 500,
-          path: request.path || request.url,
-          error: error
-        });
-      });
+      }).catch(writeError);
     }
 
     stream
       .on('error', function (error) {
-        // TODO: logging
+        // TODO: proper logging
         console.error('ERROR: ' + error);
       })
       .pipe(split(JSON.parse))

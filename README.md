@@ -3,11 +3,11 @@
 Light-weight server for authoring simple self-documenting HTTP and WebSocket APIs.
 
 
-## JSON-orientation
+## Endpoint Handlers
 
-We assume handlers deal explicitly in JSON unless otherwise noted. Endpoint "handlers" are function which take an HTTP request object and return a stream or a JSON-able object.
+We assume handlers deal explicitly in JSON unless otherwise noted. Endpoint "handlers" are function which take an HTTP request object and return a stream or an object with a JSON-able `body`.
 
-Handlers can override status `status` and/or `headers` by adding keys to the returned stream object, or adding them to the prototype of a returned value intended for JSON serialization. Overriding the value's `toJSON` method allows additional control over serialization behavior. While this makes it possible for handlers arbitrary control over the shape of responses, these design choices are intended to optimize for simplifying the construction of typical JSON endpoints.
+Handlers may provide top level `status` and/or `headers` keys in returned responses to extend or override default values.
 
 
 ## WebSockets vs. HTTP
