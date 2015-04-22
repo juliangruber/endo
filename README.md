@@ -24,7 +24,7 @@ All endpoints can be exposed over HTTP, WebSockets, or both. APIs for WebSockets
 
 ## Semver Endpoint Paths
 
-The leading path component represents API version by default. It is parsed as a semver range, allowing detailed control over version ranges when requesting a particular API endpoint. These paths are all valid ranges which include the `1.0.0` version of an API (along with many more):
+The leading path component represents API version. It is parsed as a semver range, which allows detailed control over the range of acceptable versions for endpoint requests. The below paths are just some examples of valid ranges which would include the `1.0.0` version of an API:
 
 ```
 /v1/some/endpoint
@@ -35,6 +35,8 @@ The leading path component represents API version by default. It is parsed as a 
 /~1.0.0/some/endpiont
 /^1.0/some/endpiont
 ```
+
+The last path includes a `^` character which may be percent-encoded. The version path component is decoded before comparing semver ranges, so this shouldn't be a problem.
 
 
 ## Middleware

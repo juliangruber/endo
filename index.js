@@ -15,14 +15,11 @@ function notFound(request) {
 }
 
 //
-// garbage little utils for routes (as a stopgap until gets better routing)
+// garbage little utils for routes (as a stopgap until we gets better routing)
 //
 function parseRoutes(api, versions) {
-  var routes = versions = versions = {};
-
-  if (!api.noSemver) {
-    routes = versions[api.version || '*'] = versions[api.version || '*'] = {};
-  }
+  versions || (versions = {});
+  var routes = versions[api.version || '*'] = versions[api.version || '*'] = {};
 
   //
   // endpoints are organized into groups
@@ -50,7 +47,7 @@ function parseRoutes(api, versions) {
     //
     // parse previous api routes if provided
     //
-    if (!api.noSemver && api.previous) {
+    if (api.previous) {
       parseRoutes(api.previous, versions)
     }
   }
@@ -70,23 +67,18 @@ function defaultRouter(api) {
     var components = url.parse(path).pathname.split('/').slice(1);
     var candidates = {};
 
-    if (api.noSemver) {
-      candidates[''] = routes;
+    var range = decodeURIComponent(components.shift())
+    var validRange = semver.validRange(range);
+    try {
+      Object.keys(routes).forEach(function (version) {
+        if (semver.satisfies(version, validRange)) {
+          candidates[version] = routes[version];
+        }
+      });
     }
-    else {
-      var range = decodeURIComponent(components.shift())
-      var validRange = semver.validRange(range);
-      try {
-        Object.keys(routes).forEach(function (version) {
-          if (semver.satisfies(version, validRange)) {
-            candidates[version] = routes[version];
-          }
-        });
-      }
-      catch (e) {
-        // TODO: rethrow for invalid version?
-        return null;
-      }
+    catch (e) {
+      // TODO: rethrow for invalid version?
+      return null;
     }
 
     var match = paramify('/' + components.join('/'));
