@@ -14,13 +14,9 @@ Handlers returning JSON-serialized values are analogous to RPC calls. When defin
 Response values for JSON serialization may optionally be returned as promises. Alternatively, handlers may return a stream object directly that can be piped to the WebSocket or HTTP response stream. This stream object may also provide custom `status` or `headers` keys, but these keys must be `own` properties of the stream object -- values on the stream's prototype are ignored to avoid possible conflicts.
 
 
-## WebSockets vs. HTTP
+## Transports
 
 All endpoints can be exposed over HTTP, WebSockets, or both. APIs for WebSockets interaction are symmetrical with HTTP interaction, and handlers are completely agnostic to the underlying transport -- the same handler logic is invoked, the exact same way, regardless of which transport is being used.
-
-
-## Endpoint Handlers
-
 
 
 ## Subscriptions
