@@ -1,9 +1,10 @@
 var engine = require('engine.io-stream');
 var http = require('http');
-var timestamp = require('monotonic-timestamp');
+var JSONStream = require('JSONStream');
 var paramify = require('paramify')
 var semver = require('semver');
 var split = require('split');
+var timestamp = require('monotonic-timestamp');
 var url = require('url');
 var xtend = require('xtend');
 
@@ -125,7 +126,7 @@ exports.serve = function serve(config) {
   function process(request) {
     //
     // resolve as promise for error trapping
-    // resolves to request for convenient chaining
+    // resolves to request for chaining convenience
     //
     return Promise.resolve(request)
       .then(router)
@@ -137,48 +138,43 @@ exports.serve = function serve(config) {
 
   function handleRequest(request, response) {
 
-    function writeJSON(data) {
-      var headers = xtend(data.headers, baseHeaders);
-      response.writeHead(data.status || 200, headers);
+    function writeResponse(data) {
+      if (!response.headersSent) {
+        var headers = xtend(data.headers, baseHeaders);
+        response.writeHead(data.status || 200, headers);
+      }
       response.end(JSON.stringify(data.body, null, '  '));
     }
 
     function writeError(error) {
+      // TODO: proper logging
+      console.error('RESPONSE STREAM ERROR:', error);
       //
       // normalize errors as JSON responses
       //
-      writeJSON({
-        status: error.status || 500,
-        body: {
-          name: error.name,
-          message: error.message,
-          // TODO: only write stack in dev mode
-          stack: error.stack
-        }
-      });
+      writeResponse(exports.errorResponse(error));
     }
 
     //
     // look up handler for request
     //
     return process(request).then(function (data) {
-      if (typeof data.pipe !== 'function') {
+      var body = data.body;
+
+      if (body && typeof body.pipe === 'function') {
+        //
+        // write headers and pipe body to response stream
+        //
+        response.writeHead(data.status || 200, xtend(data.headers, baseHeaders));
+        var transform = JSONStream.stringifyObject();
+        body.pipe(transform).pipe(response).on('error', writeError);
+      }
+      else {
         //
         // write non-stream data as JSON response
         //
-        return writeJSON(data);
+        writeResponse(data);
       }
-      //
-      // extract metadata from own-props on stream, if available
-      //
-      var status = data.hasOwnProperty('status') && data.status;
-      var headers = data.hasOwnProperty('headers') && data.headers;
-      response.writeHead(status || 200, xtend(headers, baseHeaders));
-
-      //
-      // stream responses get piped to response stream
-      //
-      data.pipe(response);
     })
     .catch(writeError)
   }
@@ -209,56 +205,56 @@ exports.serve = function serve(config) {
       // run event request payload through standard request processing
       //
       return process(request).then(function (data) {
+        var body = data.body;
 
-        //
-        // non-streaming handler responses result in a single event record
-        //
-        if (typeof data.pipe !== 'function') {
+        if (body && typeof body.pipe === 'function') {
+          //
+          // streaming responses get an associated subscription id
+          //
+          event.subscriptionId = timestamp();
+
+          //
+          // write event record head, providing any handler metadata
+          //
+          writeEvent({
+            status: body.status,
+            headers: body.headers
+          });
+
+          return body.on('data', function (chunk) {
+            //
+            // write data chunks to socket
+            //
+            writeEvent({
+              key: chunk[0],
+              value: chunk[1]
+            });
+          })
+          .on('close', function () {
+            //
+            // write null error key to signal end
+            //
+            writeEvent({ error: null });
+          })
+          .on('error', writeError);
+
+        }
+        else {
+          //
+          // non-streaming handler responses result in a single event record
+          //
           return writeEvent(data);
         }
-
-        //
-        // streaming responses get an associated subscription id
-        //
-        event.subscriptionId = timestamp();
-
-        //
-        // write event record head, providing any handler metadata
-        //
-        writeEvent({
-          status: data.status,
-          headers: data.headers
-        });
-
-        //
-        // write data chunks to socket
-        //
-        data.on('data', function (chunk) {
-          writeEvent({ body: chunk });
-        });
-
-        //
-        // write null error key to signal end
-        //
-        data.on('close', function () {
-          writeEvent({ error: null });
-        });
-
-        //
-        // pass along error, signaling stream end
-        //
-        data.on('error', writeError);
 
       }).catch(writeError);
     }
 
-    stream
-      .on('error', function (error) {
-        // TODO: proper logging
-        console.error('ERROR: ' + error);
-      })
-      .pipe(split(JSON.parse))
-      .on('data', handleRequestEvent);
+    stream.on('error', function (error) {
+      // TODO: proper logging
+      console.error('EVENT STREAM ERROR:', error);
+    })
+    .pipe(split(JSON.parse))
+    .on('data', handleRequestEvent);
   }
 
   //
@@ -266,10 +262,10 @@ exports.serve = function serve(config) {
   //
   var server = http.createServer(handleRequest);
 
-  return Promise.resolve(null).then(function () {
+  return new Promise(function (resolve, reject) {
     server.listen(config.port, config.host, function (error) {
       if (error) {
-        throw error;
+        return reject(new Error('wtf!!! man'));
       }
 
       //
@@ -279,7 +275,7 @@ exports.serve = function serve(config) {
         engine(handleEvent).attach(server, config.socketPath);
       }
 
-      return server;
+      resolve(server);
     });
   });
 }
@@ -288,6 +284,17 @@ exports.serve = function serve(config) {
 // all response normalization/validation logic should happen in one place
 //
 exports.normalizeResponse = function (data) {
-  // TODO
   return data;
+};
+
+exports.errorResponse = function (error) {
+  return {
+    status: error.status || 500,
+    body: {
+      name: error.name,
+      message: error.message,
+      // TODO: only write stack in dev mode
+      stack: error.stack
+    }
+  }
 };

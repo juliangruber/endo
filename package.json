@@ -4,6 +4,7 @@
   "description": "Simple server for serving up self-documenting API endpoints",
   "main": "index.js",
   "dependencies": {
+    "JSONStream": "^0.10.0",
     "ecstatic": "^0.5.5",
     "engine.io-stream": "^0.4.3",
     "monotonic-timestamp": "0.0.9",
