@@ -62,14 +62,14 @@ exports.serve = function serve(config) {
         //
         response.writeHead(data.status || 200, xtend(data.headers, baseHeaders));
         var transform = JSONStream.stringifyObject();
-        body.pipe(transform).pipe(response);
+        return body.pipe(transform).pipe(response);
       }
-      else {
-        //
-        // write non-stream data as JSON response
-        //
-        writeResponse(data);
-      }
+
+      //
+      // write data with non-stream bodiy as plain response
+      //
+      writeResponse(data);
+
     })
     .catch(writeError)
   }
@@ -121,20 +121,20 @@ exports.serve = function serve(config) {
           })
           .on('close', function () {
             //
-            // write null error key to signal end
+            // write null error key to signal request end
             //
             writeEvent({ error: null });
           })
 
         }
-        else {
-          //
-          // non-streaming handler responses result in a single event record
-          //
-          return writeEvent(data);
-        }
 
-      }).catch(function (error) {
+        //
+        // non-streaming handler responses result in a single event record
+        //
+        return writeEvent(data);
+
+      })
+      .catch(function (error) {
         writeEvent({ error: error });
       });
     }
