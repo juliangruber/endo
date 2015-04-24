@@ -1,11 +1,11 @@
 {
   "name": "endo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Simple server for serving up self-documenting API endpoints",
   "main": "index.js",
   "dependencies": {
     "JSONStream": "^0.10.0",
-    "ecstatic": "^0.5.5",
+    "endoc": "https://github.com/deanlandolt/endoc/tarball/master",
     "engine.io-stream": "^0.4.3",
     "monotonic-timestamp": "0.0.9",
     "paramify": "^0.1.2",

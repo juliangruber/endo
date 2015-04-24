@@ -43,13 +43,13 @@ endpoints.parse = function (api, versions) {
   }
 
   return versions;
-}
+};
 
 //
 // default router, parsers semver from url paths
 //
 endpoints.handler = function (handler, config) {
-  var versions = endpoints.parse(config.api);
+  var versions = config.endpoints = endpoints.parse(config.api);
 
   return function (request) {
     var path = request.url;
@@ -98,4 +98,4 @@ endpoints.handler = function (handler, config) {
     //
     return handler(request);
   };
-}
+};

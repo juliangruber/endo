@@ -5,44 +5,65 @@ var split = require('split');
 var timestamp = require('monotonic-timestamp');
 var xtend = require('xtend');
 
+var docs = require('endoc');
 var endpoints = require('./endpoints');
 var errors = require('./errors');
 var logs = require('./logs');
 
 
-exports.headers = { 'content-type': 'application/json' };
-
 exports.serve = function serve(config) {
-  var baseHeaders = xtend(config.headers, exports.headers);
-
   //
   // base routing logic for invoking correct endpoint
   //
-  var handler = endpoints.handler(errors.NotFound, config);
+  var handler = endpoints.handler(function (request) {
+    //
+    // respond with a 404 if no endpoint route found
+    //
+    return errors.response(errors.NotFound(request));
+  }, config);
+
+  //
+  // serve api docs, if requested
+  //
+  if (config.docs) {
+    handler = docs.handler(handler, config);
+  }
 
   //
   // add loggging, if requested
   //
   if (config.log) {
-    handler = logs.handler(handler, config)
+    handler = logs.handler(handler, config);
   }
 
   //
   // add error handler
   //
-  handler = errors.handler(handler, config)
+  handler = errors.handler(handler, config);
 
   function handleRequest(request, response) {
 
     function writeResponse(data) {
       //
+      // set default content-type
+      //
+      var body = data.body;
+      var headers = xtend(data.headers, config.headers);
+
+      //
+      // return values encoded as buffers bypass JSON encoding
+      //
+      if (body !== void 0 && !Buffer.isBuffer(body)) {
+        headers['content-type'] = 'application/json';
+        body = JSON.stringify(body, null, '  ');
+      }
+      //
       // only write headers if they haven't already been sent
       //
       if (!response.headersSent) {
-        var headers = xtend(data.headers, baseHeaders);
         response.writeHead(data.status || 200, headers);
       }
-      response.end(JSON.stringify(data.body, null, '  '));
+      response.end(body);
     }
 
     //
@@ -55,7 +76,7 @@ exports.serve = function serve(config) {
         //
         // write headers and pipe body to response stream
         //
-        response.writeHead(data.status || 200, xtend(data.headers, baseHeaders));
+        response.writeHead(data.status || 200, data.headers);
         var transform = JSONStream.stringifyObject();
         return body.pipe(transform).pipe(response);
       }
@@ -67,7 +88,7 @@ exports.serve = function serve(config) {
 
     })
     .catch(function (error) {
-      logs.error('RESPONSE STREAM ERROR', error)
+      logs.error('RESPONSE STREAM ERROR', error.stack)
       writeResponse(errors.response(error));
     });
   }
@@ -158,8 +179,8 @@ exports.serve = function serve(config) {
       //
       // attach websocket server if requested
       //
-      if (config.socketPath) {
-        engine(handleEvent).attach(server, config.socketPath);
+      if (config.sockets) {
+        engine(handleEvent).attach(server, config.sockets.path || '/socket');
       }
 
       resolve(server);

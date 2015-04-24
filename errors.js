@@ -4,11 +4,15 @@ var errors = exports;
 // 404 error class
 //
 function NotFound(request) {
+  if (!(this instanceof NotFound)) {
+    return new NotFound(request);
+  }
+
   this.status = 404;
   this.message = 'Not Found: ' + request.url;
   this.stack = Error().stack;
 }
-errors.NotFound
+errors.NotFound = NotFound
 
 NotFound.prototype = Object.create(Error.prototype);
 NotFound.prototype.name = 'NotFoundError';
@@ -34,12 +38,11 @@ errors.response = function (error) {
     message: error.message
   };
 
-  if (config.dev) {
+  if (errors.verbose || true) {
     body.stack = error.stack
   }
   return {
     status: error.status || 500,
-    headers: { 'content-type': 'application/json' },
     body: body
   };
 }
