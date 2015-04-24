@@ -35,19 +35,14 @@ exports.serve = function serve(config) {
   function handleRequest(request, response) {
 
     function writeResponse(data) {
+      //
+      // only write headers if they haven't already been sent
+      //
       if (!response.headersSent) {
         var headers = xtend(data.headers, baseHeaders);
         response.writeHead(data.status || 200, headers);
       }
       response.end(JSON.stringify(data.body, null, '  '));
-    }
-
-    function writeError(error) {
-      logs.error('RESPONSE STREAM ERROR', error)
-      //
-      // normalize errors as JSON responses
-      //
-      writeResponse(errors.response(error));
     }
 
     //
@@ -71,7 +66,10 @@ exports.serve = function serve(config) {
       writeResponse(data);
 
     })
-    .catch(writeError)
+    .catch(function (error) {
+      logs.error('RESPONSE STREAM ERROR', error)
+      writeResponse(errors.response(error));
+    });
   }
 
   //
@@ -125,7 +123,6 @@ exports.serve = function serve(config) {
             //
             writeEvent({ error: null });
           })
-
         }
 
         //
@@ -135,6 +132,7 @@ exports.serve = function serve(config) {
 
       })
       .catch(function (error) {
+        logs.error('SOCKET STREAM ERROR', error)
         writeEvent({ error: error });
       });
     }
