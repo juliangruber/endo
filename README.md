@@ -16,7 +16,7 @@ Response values for JSON serialization may optionally be returned as promises. A
 
 ## Transports
 
-All endpoints can be exposed over HTTP, WebSockets, or both. APIs for WebSockets interaction are symmetrical with HTTP interaction, and handlers are completely agnostic to the underlying transport -- the same handler logic is invoked, the exact same way, regardless of which transport is being used.
+All endpoints can be exposed over HTTP, WebSockets with line-separated JSON, or both. Interaction over WebSockets is symmetrical with HTTP, and handlers should be transport-agnostic. The same handler logic is invoked in the same way regardless of the underlying protocol.
 
 
 ## Subscriptions
@@ -42,3 +42,7 @@ The last path includes a `^` character which may be percent-encoded. The version
 ## Middleware
 
 Middleware functionality can be written as higher-order functions which wrap handlers. A middleware function may inspect or alter the request object before passing it to the provided handler. It may also inspect or alter the response returned from the handler. No magical non-linear middleware conventions are necessary -- just function composition.
+
+### Logging
+
+A `log` function can be provided in the `config`. A truthy non-function value for the `log` attribute gets the default logger, `console.log`.

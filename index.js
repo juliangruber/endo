@@ -7,6 +7,8 @@ var split = require('split');
 var timestamp = require('monotonic-timestamp');
 var url = require('url');
 var xtend = require('xtend');
+var errors = require('./errors')
+var logs = require('./logs')
 
 //
 // garbage little utils for routes (as a stopgap until we gets better routing)
@@ -48,18 +50,6 @@ function parseEndpoints(api, versions) {
 
   return versions;
 }
-
-//
-// 404 error class
-//
-function NotFoundError(request) {
-  this.status = 404;
-  this.message = 'Not Found: ' + request.url;
-  this.stack = Error().stack;
-}
-NotFoundError.prototype = Object.create(Error.prototype);
-NotFoundError.prototype.name = 'NotFoundError';
-NotFoundError.prototype.constructor = NotFoundError
 
 //
 // crappy little default router that parsers semver from url paths
@@ -110,7 +100,7 @@ function defaultRouter(api) {
       }
     }
 
-    throw new NotFoundError(request);
+    throw new errors.NotFound(request);
   };
 }
 
@@ -123,7 +113,7 @@ exports.serve = function serve(config) {
   //
   // logic for identifying and invoking the correct endpoint
   //
-  function process(request) {
+  function handler(request) {
     //
     // resolve as promise for error trapping
     // resolves to request for chaining convenience
@@ -133,8 +123,19 @@ exports.serve = function serve(config) {
       .then(function (route) {
         return route.handler(route.request);
       })
-      .then(exports.normalizeResponse)
   }
+
+  //
+  // add loggging, if requested
+  //
+  if (config.log) {
+    handler = logs(handler, config)
+  }
+
+  //
+  // add error handler
+  //
+  handler = errors(handler, config)
 
   function handleRequest(request, response) {
 
@@ -147,18 +148,17 @@ exports.serve = function serve(config) {
     }
 
     function writeError(error) {
-      // TODO: proper logging
-      console.error('RESPONSE STREAM ERROR:', error);
+      logs.error('RESPONSE STREAM ERROR', error)
       //
       // normalize errors as JSON responses
       //
-      writeResponse(exports.errorResponse(error));
+      writeResponse(errors.response(error));
     }
 
     //
     // look up handler for request
     //
-    return process(request).then(function (data) {
+    return handler(request).then(function (data) {
       var body = data.body;
 
       if (body && typeof body.pipe === 'function') {
@@ -204,7 +204,7 @@ exports.serve = function serve(config) {
       //
       // run event request payload through standard request processing
       //
-      return process(request).then(function (data) {
+      return handler(request).then(function (data) {
         var body = data.body;
 
         if (body && typeof body.pipe === 'function') {
@@ -250,8 +250,7 @@ exports.serve = function serve(config) {
     }
 
     stream.on('error', function (error) {
-      // TODO: proper logging
-      console.error('EVENT STREAM ERROR:', error);
+      logs.error('SOCKET ERROR', error);
     })
     .pipe(split(JSON.parse))
     .on('data', handleRequestEvent);
@@ -265,7 +264,7 @@ exports.serve = function serve(config) {
   return new Promise(function (resolve, reject) {
     server.listen(config.port, config.host, function (error) {
       if (error) {
-        return reject(new Error('wtf!!! man'));
+        return reject(error);
       }
 
       //
@@ -279,22 +278,3 @@ exports.serve = function serve(config) {
     });
   });
 }
-
-//
-// all response normalization/validation logic should happen in one place
-//
-exports.normalizeResponse = function (data) {
-  return data;
-};
-
-exports.errorResponse = function (error) {
-  return {
-    status: error.status || 500,
-    body: {
-      name: error.name,
-      message: error.message,
-      // TODO: only write stack in dev mode
-      stack: error.stack
-    }
-  }
-};
