@@ -1,141 +1,36 @@
 var engine = require('engine.io-stream');
 var http = require('http');
 var JSONStream = require('JSONStream');
-var paramify = require('paramify')
-var semver = require('semver');
 var split = require('split');
 var timestamp = require('monotonic-timestamp');
-var url = require('url');
 var xtend = require('xtend');
-var errors = require('./errors')
-var logs = require('./logs')
 
-//
-// garbage little utils for routes (as a stopgap until we gets better routing)
-//
-function parseEndpoints(api, versions) {
-  versions || (versions = {});
-  var routes = versions[api.version || '*'] = versions[api.version || '*'] = {};
+var endpoints = require('./endpoints');
+var errors = require('./errors');
+var logs = require('./logs');
 
-  //
-  // endpoints are organized into groups
-  //
-  for (var groupName in api.groups) {
-    var group = api.groups[groupName];
-    var endpoints = group.endpoints || {};
 
-    for (var name in endpoints) {
-      var endpoint = endpoints[name];
-
-      if (endpoint.path) {
-        //
-        // add endpoint descriptor to route map
-        //
-        routes[endpoint.path] = endpoint;
-
-        //
-        // normalize method names
-        //
-        endpoint.method = (endpoint.method || 'GET').toUpperCase();
-      }
-    }
-
-    //
-    // parse previous api routes if provided
-    //
-    if (api.previous) {
-      parseEndpoints(api.previous, versions)
-    }
-  }
-
-  return versions;
-}
-
-//
-// crappy little default router that parsers semver from url paths
-//
-function defaultRouter(api) {
-  var versions = parseEndpoints(api);
-
-  return function (request) {
-    var path = request.url;
-    var components = url.parse(path).pathname.split('/').slice(1);
-    var candidates = {};
-
-    var range = decodeURIComponent(components.shift());
-    var validRange = semver.validRange(range);
-
-    //
-    // find a candidate set of allowable versions for route matching
-    //
-    Object.keys(versions).forEach(function (version) {
-      if (semver.satisfies(version, validRange)) {
-        candidates[version] = versions[version];
-      }
-    });
-
-    var match = paramify('/' + components.join('/'));
-
-    //
-    // iterate over available routes for all candidate versions (descending)
-    //
-    for (var version in candidates) {
-      var candidate = candidates[version]
-      for (var route in candidate) {
-        endpoint = candidate[route]
-
-        //
-        // match route by method and path info
-        //
-        if (request.method == endpoint.method && match(route)) {
-          //
-          // add params to request and return match context
-          //
-          request.params = match.params;
-          return {
-            request: request,
-            handler: endpoint.handler
-          };
-        }
-      }
-    }
-
-    throw new errors.NotFound(request);
-  };
-}
-
-var defaultHeaders = { 'content-type': 'application/json' };
+exports.headers = { 'content-type': 'application/json' };
 
 exports.serve = function serve(config) {
-  var baseHeaders = xtend(config.headers, defaultHeaders);
-  var router = defaultRouter(config.api);
+  var baseHeaders = xtend(config.headers, exports.headers);
 
   //
-  // logic for identifying and invoking the correct endpoint
+  // base routing logic for invoking correct endpoint
   //
-  function handler(request) {
-    //
-    // resolve as promise for error trapping
-    // resolves to request for chaining convenience
-    //
-    return Promise.resolve(request)
-      .then(router)
-      .then(function (route) {
-        return route.handler(route.request);
-      })
-  }
+  var handler = endpoints.handler(errors.NotFound, config);
 
   //
   // add loggging, if requested
   //
   if (config.log) {
-    handler = logs(handler, config)
+    handler = logs.handler(handler, config)
   }
 
   //
   // add error handler
   //
-  handler = errors(handler, config)
+  handler = errors.handler(handler, config)
 
   function handleRequest(request, response) {
 
@@ -167,7 +62,7 @@ exports.serve = function serve(config) {
         //
         response.writeHead(data.status || 200, xtend(data.headers, baseHeaders));
         var transform = JSONStream.stringifyObject();
-        body.pipe(transform).pipe(response).on('error', writeError);
+        body.pipe(transform).pipe(response);
       }
       else {
         //
@@ -193,13 +88,7 @@ exports.serve = function serve(config) {
         stream.write(JSON.stringify(xtend(event, data)) + '\n');
       }
 
-      function writeError(error) {
-        writeEvent({ error: error });
-      }
-
-      var event = {
-        url: request.url
-      };
+      var event = { url: request.url };
 
       //
       // run event request payload through standard request processing
@@ -236,7 +125,6 @@ exports.serve = function serve(config) {
             //
             writeEvent({ error: null });
           })
-          .on('error', writeError);
 
         }
         else {
@@ -246,7 +134,9 @@ exports.serve = function serve(config) {
           return writeEvent(data);
         }
 
-      }).catch(writeError);
+      }).catch(function (error) {
+        writeEvent({ error: error });
+      });
     }
 
     stream.on('error', function (error) {

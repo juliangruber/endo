@@ -1,6 +1,11 @@
 var now = require('performance-now')
 
-var logs = function (handler, config) {
+var logs = exports;
+
+//
+// endpoint logging middleware
+//
+logs.handler = function (handler, config) {
   //
   // use custom log handler if provided, otherwise defer to console.log
   //
@@ -24,10 +29,10 @@ var logs = function (handler, config) {
     return Promise.resolve(handler(request)).then(function (response) {
       log.auth = request.auth;
 
-      log.endpoint = {
-        version: request.endpointVersion,
-        route: request.route,
-        params: request.params
+      log.api = {
+        version: request.apiVersion,
+        params: request.params,
+        route: request.route
       };
 
       log.response = {
@@ -48,4 +53,3 @@ var logs = function (handler, config) {
 // TODO: proper logging
 logs.error = console.error;
 
-module.exports = logs;
