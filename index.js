@@ -13,14 +13,21 @@ var logs = require('./logs');
 
 exports.serve = function serve(config) {
   //
-  // base routing logic for invoking correct endpoint
+  // bottom out with a 404
   //
-  var handler = endpoints.handler(function (request) {
-    //
-    // respond with a 404 if no endpoint route found
-    //
-    return errors.response(errors.NotFound(request));
-  }, config);
+  var notFound = function (request) {
+    throw new errors.NotFound(request.url);
+  };
+
+  //
+  // invoke default base handler or one provided with config
+  //
+  var handler = (config.handler || exports.handler)(notFound, config);
+
+  //
+  // routing logic for identifying the correct endpoint
+  //
+  handler = endpoints.handler(handler, config);
 
   //
   // serve api docs, if requested
@@ -39,6 +46,7 @@ exports.serve = function serve(config) {
   //
   // add error handler
   //
+  // TODO: cluster so we can fail hard
   handler = errors.handler(handler, config);
 
   function handleRequest(request, response) {
@@ -66,10 +74,15 @@ exports.serve = function serve(config) {
       response.end(body);
     }
 
+    function writeError(error) {
+      errors.log('RESPONSE STREAM ERROR', error.stack)
+      writeResponse(errors.response(error));
+    }
+
     //
     // look up handler for request
     //
-    return handler(request).then(function (data) {
+    return Promise.resolve(handler(request)).then(function (data) {
       var body = data.body;
 
       if (body && typeof body.pipe === 'function') {
@@ -86,11 +99,7 @@ exports.serve = function serve(config) {
       //
       writeResponse(data);
 
-    })
-    .catch(function (error) {
-      logs.error('RESPONSE STREAM ERROR', error.stack)
-      writeResponse(errors.response(error));
-    });
+    }).catch(writeError);
   }
 
   //
@@ -112,7 +121,7 @@ exports.serve = function serve(config) {
       //
       // run event request payload through standard request processing
       //
-      return handler(request).then(function (data) {
+      return Promise.resolve(handler(request)).then(function (data) {
         var body = data.body;
 
         if (body && typeof body.pipe === 'function') {
@@ -129,6 +138,7 @@ exports.serve = function serve(config) {
             headers: body.headers
           });
 
+          // TODO: differentiate between array-like and map-like object streams
           return body.on('data', function (chunk) {
             //
             // write data chunks to socket
@@ -153,13 +163,13 @@ exports.serve = function serve(config) {
 
       })
       .catch(function (error) {
-        logs.error('SOCKET STREAM ERROR', error)
+        errors.log('SOCKET STREAM ERROR', error)
         writeEvent({ error: error });
       });
     }
 
     stream.on('error', function (error) {
-      logs.error('SOCKET ERROR', error);
+      errors.log('SOCKET ERROR', error);
     })
     .pipe(split(JSON.parse))
     .on('data', handleRequestEvent);
@@ -169,6 +179,10 @@ exports.serve = function serve(config) {
   // spin up http server to handle requests
   //
   var server = http.createServer(handleRequest);
+
+  server.on('error', function (error) {
+    errors.log('SERVER ERROR', error);
+  });
 
   return new Promise(function (resolve, reject) {
     server.listen(config.port, config.host, function (error) {
@@ -180,10 +194,19 @@ exports.serve = function serve(config) {
       // attach websocket server if requested
       //
       if (config.sockets) {
-        engine(handleEvent).attach(server, config.sockets.path || '/socket');
+        engine(handleEvent).attach(server, config.sockets.path || '/ws');
       }
 
       resolve(server);
     });
   });
+}
+
+exports.handler = function (next) {
+  return function (request) {
+    if (request.endpoint && typeof request.endpoint.handler === 'function') {
+      return request.endpoint.handler(request);
+    }
+    return next(request);
+  }
 }

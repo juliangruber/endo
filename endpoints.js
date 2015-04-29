@@ -4,22 +4,40 @@ var url = require('url');
 
 var endpoints = exports;
 
+function updatePermissions(target, parent) {
+  if (!target.permissions) {
+    target.permissions = [];
+  }
+  else if (typeof target.permissions === 'string') {
+    target.permissions = [ target.permissions ];
+  }
+
+  // TODO: set semantics
+  if (parent) {
+    target.permissions = parent.permissions.concat(target.permissions || []);
+  }
+}
+
 //
-// stupid little default implementation for routing endpoints
+// stupid little default implementation for parsing and normalizing endpoints
 //
 endpoints.parse = function (api, versions) {
   versions || (versions = {});
-  var routes = versions[api.version || '*'] = versions[api.version || '*'] = {};
+  var version = api.version = api.version || '*';
+  var routes = versions[version] = versions[version] = {};
 
   //
-  // endpoints are organized into groups
+  // endpoints are organized into sections
   //
-  for (var groupName in api.groups) {
-    var group = api.groups[groupName];
-    var endpoints = group.endpoints || {};
+  for (var sectionName in api.sections) {
+    var section = api.sections[sectionName];
+    updatePermissions(section);
+    var endpoints = section.endpoints || {};
 
     for (var name in endpoints) {
       var endpoint = endpoints[name];
+      endpoint.version = version;
+      updatePermissions(endpoint, section);
 
       if (endpoint.path) {
         //
@@ -46,9 +64,9 @@ endpoints.parse = function (api, versions) {
 };
 
 //
-// default router, parsers semver from url paths
+// default route matcher -- looks up endpoint by semver version in path
 //
-endpoints.handler = function (handler, config) {
+endpoints.handler = function (next, config) {
   var versions = config.endpoints = endpoints.parse(config.api);
 
   return function (request) {
@@ -81,14 +99,16 @@ endpoints.handler = function (handler, config) {
         //
         // match route by method and path info
         //
-        if (request.method == endpoint.method && match(route)) {
+        // TODO: cache transform or replace with route matcher that does curlies
+        var mungedRoute = route.replace(/\{(.*)\}/g, ':$1');
+        if (request.method == endpoint.method && match(mungedRoute)) {
           //
           // add match details to request and invoke endpoint handler
           //
-          request.apiVersion = version;
+          // TODO: clean this up
+          request.endpoint = endpoint;
           request.params = match.params;
-          request.route = route;
-          return endpoint.handler(request);
+          return next(request);
         }
       }
     }
@@ -96,6 +116,6 @@ endpoints.handler = function (handler, config) {
     //
     // fallback handler for when a valid endpoint is not found
     //
-    return handler(request);
+    return next(request);
   };
 };

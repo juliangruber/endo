@@ -5,51 +5,35 @@ var logs = exports;
 //
 // endpoint logging middleware
 //
-logs.handler = function (handler, config) {
+logs.handler = function (next, config) {
   //
   // use custom log handler if provided, otherwise defer to console.log
   //
-  var logger = typeof config.log === 'function' ? config.log : console.log;
+  var format = typeof config.log === 'function' ? config.log : logs.format;
 
   return function (request) {
+    request.endo = {};
+    request.endo.start = now();
 
-    var start = now();
-    var log = {
-      request: {
-        protocol: request.httpVersion ? [
-          'HTTP', request.httpVersionMajor, request.httpVersionMinor
-        ] : 'WS',
-        method: request.method,
-        headers: request.headers,
-        path: request.url,
-        search: request.search
-      }
-    };
-
-    return Promise.resolve(handler(request)).then(function (response) {
-      log.auth = request.auth;
-
-      log.api = {
-        version: request.apiVersion,
-        params: request.params,
-        route: request.route
-      };
-
-      log.response = {
-        status: response.status,
-        headers: response.headers
-      };
-      log.time = now() - start;
-
-      logger(log)
+    return Promise.resolve(next(request)).then(function (response) {
+      request.endo.end = now();
 
       // TODO: instrument req/res bodies to measure sizes, times?
-      return response;
+      return Promise.resolve(format(request, response)).then(function () {
+        return response;
+      });
 
     });
   };
 };
 
-// TODO: proper logging
-logs.error = console.error;
-
+logs.format = function (request, response) {
+  var endpoint = request.endpoint;
+  console.log([
+    request.httpVersion ? 'HTTP/' + request.httpVersion : 'WS',
+    request.method,
+    request.path + request.search || '',
+    endpoint ? ('endpoint:' + endpoint.path + '@' + endpoint.version) : '',
+    'time:' + (request.endo.end - request.endo.start)
+  ].join(' '));
+};
